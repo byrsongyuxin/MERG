@@ -11,7 +11,7 @@ Setup the environment follow this [link](https://github.com/graphdeeplearning/be
 Follow this [link](https://github.com/graphdeeplearning/benchmarking-gnns/blob/master/docs/02_download_datasets.md). to download datasets(MNIST,CIFAR10,CLUSTER,PATTERN,COLLAB,TSP).
 
 ## 3. Reproducibility
-To reproduct the main article results in Tabel 1, please refer to the scripts(CIDAR10.sh, MNIST.sh, CLUSTER.sh, PATTERN.sh, COLLAB.sh, TSP.sh)
+To reproduct the main article results in Tabel 1, please refer to the scripts(CIFAR10.sh, MNIST.sh, CLUSTER.sh, PATTERN.sh, COLLAB.sh, TSP.sh)
 
 ## the project structure:
 ```
