@@ -1,5 +1,5 @@
 # MERG: Multi-dimensional Edge Representation Generation Layer for Graph Neural Networks
-
+![image] (https://github.com/byrsongyuxin/MERG/blob/main/pipeline.png)
 <br>
 * The implementation of paper "MERG: Multi-dimensional Edge Representation Generation Layer for Graph Neural Networks". 
 * Project based on DGL 0.4.2. PyTorch 1.7
