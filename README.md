@@ -15,7 +15,7 @@ To reproduct the main article results in Tabel 1, please refer to the scripts(CI
 
 ## the project structure:
 ```
-TTME/
+MERG/
   data/
     superpixels/
       CIFAR10.pkl
