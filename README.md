@@ -1,4 +1,4 @@
-# Learning Task-specific Topology and Multi-dimensional EdgeFeatures for Graphs
+# MERG: Multi-dimensional Edge Representation Generation Layer for Graph Neural Networks
 
 <br>
 * The implementation of paper "MERG: Multi-dimensional Edge Representation Generation Layer for Graph Neural Networks". 
