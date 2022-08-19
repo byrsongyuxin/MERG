@@ -12,6 +12,7 @@ Follow this [link](https://github.com/graphdeeplearning/benchmarking-gnns/blob/m
 
 ## 3. Reproducibility
 To reproduct the main article results in Tabel 1, please refer to the scripts(CIFAR10.sh, MNIST.sh, CLUSTER.sh, PATTERN.sh, COLLAB.sh, TSP.sh)
+![image](https://github.com/byrsongyuxin/MERG/blob/main/sota.jpg)
 
 ## the project structure:
 ```
