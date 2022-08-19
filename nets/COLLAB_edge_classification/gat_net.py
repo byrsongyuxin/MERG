@@ -12,34 +12,7 @@ import dgl
 from layers.gat_layer import GATLayer, CustomGATLayer, CustomGATLayerEdgeReprFeat, CustomGATLayerIsotropic
 from layers.mlp_readout_layer import MLPReadout
 
-class MERG(nn.Module):
-    def __init__(self, in_dim, hidden_dim, num_heads):
-        super().__init__()
-        #self.proj1 = nn.Linear(235868,512) #baseline4
-        #self.proj2 = nn.Linear(512,2358104) #baseline4
-        #self.proj3 = nn.Linear(in_dim,hidden_dim * num_heads) #baseline4
-        self.edge_proj = nn.Conv1d(in_channels=2,out_channels=1,kernel_size=3,padding=1) #baseline4
-        self.edge_proj2 = nn.Linear(in_dim,hidden_dim * num_heads) #baseline4
-        self.bn_node_lr_e = nn.BatchNorm1d(hidden_dim * num_heads) #baseline4
-
-    def forward(self, g, h, e):
-        g.apply_edges(lambda edges: {'src' : edges.src['feat']})
-        src = g.edata['src'].unsqueeze(1) #[M,1,D]
-        g.apply_edges(lambda edges: {'dst' : edges.dst['feat']})
-        dst = g.edata['dst'].unsqueeze(1) #[M,1,D]
-        edge = torch.cat((src,dst),1).to(h.device).float() #[M,2,D]
-        lr_e_local = self.edge_proj(edge).squeeze(1)#[M,D]
-        lr_e_local = self.edge_proj2(lr_e_local)
         
-        e = lr_e_local #+ lr_e_global #baseline4
-        # bn=>relu=>dropout
-        e = self.bn_node_lr_e(e)
-        e = F.relu(e)
-        e = F.dropout(e, 0.1, training=self.training)
-
-        return e
-        
-
 class GATNet(nn.Module):
     def __init__(self, net_params):
         super().__init__()
@@ -68,21 +41,33 @@ class GATNet(nn.Module):
         #self.embedding_e = nn.Linear(in_dim_edge, hidden_dim * num_heads)
         self.in_feat_dropout = nn.Dropout(in_feat_dropout)
         
-        self.layers = nn.ModuleList([self.layer_type(hidden_dim * num_heads, hidden_dim, num_heads,
-                                                     dropout, self.batch_norm, self.residual) for _ in range(n_layers-1)])
-        self.layers.append(self.layer_type(hidden_dim * num_heads, out_dim, 1, dropout, self.batch_norm, self.residual))
+        #self.layers = nn.ModuleList([self.layer_type(hidden_dim * num_heads, hidden_dim, num_heads,
+        #                                             dropout, self.batch_norm, self.residual) for _ in range(n_layers-1)])
+        #self.layers.append(self.layer_type(hidden_dim * num_heads, out_dim, 1, dropout, self.batch_norm, self.residual))
+        
+        ayers_list = []
+        for i in range(n_layers-1):
+            if i in [0, ]: #[0, 2]
+                edge_lr = True
+            else:
+                edge_lr = False
+            layers_list.append(CustomGATLayerEdgeReprFeat(hidden_dim * num_heads, hidden_dim, num_heads,
+                                              dropout, self.batch_norm, self.residual, edge_lr))
+        layers_list.append(CustomGATLayerEdgeReprFeat(hidden_dim * num_heads, out_dim, 1, dropout, self.batch_norm, self.residual, edge_lr=False))
+        
+        self.layers = nn.ModuleList(layers_list)
         self.MLP_layer = MLPReadout(2*out_dim, 1)
 
-        self.merg = MERG(in_dim, hidden_dim, num_heads)
         
        
     def forward(self, g, h, e):
-        lr_e = self.merg(g,h,e)
-        e = lr_e
         
         h = self.embedding_h(h.float())
         h = self.in_feat_dropout(h)
-
+        if not self.edge_feat:
+            e = torch.ones_like(e).to(self.device)
+        e = self.embedding_e(e.float())
+        
         for conv in self.layers:
             h, e = conv(g, h, e)
         g.ndata['h'] = h
