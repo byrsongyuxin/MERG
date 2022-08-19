@@ -1,7 +1,7 @@
 # Learning Task-specific Topology and Multi-dimensional EdgeFeatures for Graphs
 
 <br>
-* The implementation of paper: Learning Task-specific Topology and Multi-dimensional EdgeFeatures for Graphs. 
+* The implementation of paper "MERG: Multi-dimensional Edge Representation Generation Layer for Graph Neural Networks". 
 * Project based on DGL 0.4.2. PyTorch 1.7
 
 ## 1. Requirement
