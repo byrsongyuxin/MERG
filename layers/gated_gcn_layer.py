@@ -28,7 +28,6 @@ class MERG(nn.Module):
         self.bn_local = nn.LayerNorm(in_dim)
         self.bn_global = nn.BatchNorm1d(hidden_dim) #baseline4
         
-        self.v_id = 0
 
     def forward(self, g, h, e, batch_labels):
         # modified baseline4
@@ -51,69 +50,6 @@ class MERG(nn.Module):
         h_proj2 = h_proj2.permute(1,0)
         mm = torch.mm(h_proj1,h_proj2)
         mm = mm.view(N,self.hidden_dim,-1).permute(0,2,1) #[N, N, D]
-        
-        ######## visualize
-        background = torch.zeros([N, N])
-        background[g.all_edges()[0],g.all_edges()[1]] = 1
-        print(background)
-        
-        '''
-        #print('batch_labels: ', batch_labels.shape, batch_labels.dtype)
-        label = torch.ones([N,N], dtype=torch.int64)*2
-        label = label.cuda()
-
-        label[g.all_edges()[0],g.all_edges()[1]] = batch_labels
-        print('label', label.max(), label.min(), label.shape)
-        '''
-        
-#        plt.imshow(background, cmap=plt.cm.inferno, vmin=0, vmax=1) # magma inferno
-#        plt.colorbar()
-#        plt.savefig(os.path.join('CIFAR10_visual','back'+str(self.v_id)+'.jpg'))
-#        plt.close()
-#        print('save, background: ', os.path.join('CIFAR10_visual','back'+str(self.v_id)+'.jpg'))
-        
-        
-        if self.v_id < 100:
-            vmm = mm.mean(-1)
-            
-            #vmm = F.softmax(vmm, dim=0) * F.softmax(vmm, dim=1)
-            
-            vmm = vmm.cpu()
-            vmm = (vmm - vmm.min().item()) / (vmm.max().item() - vmm.min().item())
-           
-            vmm_np = vmm.numpy()
-            
-            print('vmm ', vmm, vmm.min(), vmm.max(), vmm.mean())
-            plt.imshow(vmm_np, cmap=plt.cm.inferno, vmin=0, vmax=1) # magma inferno
-            plt.gca().set_title("TSP",fontsize=20)
-            plt.xlabel("Node Index",fontsize=20)
-            plt.ylabel("Node Index",fontsize=20)
-            plt.colorbar()
-            plt.savefig(os.path.join('TSP_visual',str(self.v_id)+'.jpg'))
-            print('save: ', os.path.join('TSP_visual',str(self.v_id)+'.jpg'))
-            
-            self.v_id += 1
-            plt.close()
-            #plt.show()
-            
-        else:
-            import sys; sys.exit(0)
-        '''
-        
-        #label_np = batch_labels.cpu().numpy()
-        label_np = label.reshape([-1]).cpu().numpy()
-        
-        #mm = mm[g.all_edges()[0],g.all_edges()[1],:] ###!!!
-        
-        vmm_np = mm.reshape([-1, mm.shape[-1]]).cpu().numpy()
-        np.save('label_np',label_np)
-        np.save('vmm_np',vmm_np)
-        
-        print('vmm_np, ', vmm_np.shape)
-        print('label_np ', label_np.shape)
-        '''
-        ########
-        
         
         lr_e_global = mm[g.all_edges()[0],g.all_edges()[1],:] #[M,D]
         
