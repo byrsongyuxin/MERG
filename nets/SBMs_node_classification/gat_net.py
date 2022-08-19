@@ -9,85 +9,8 @@ import dgl
     Graph Attention Networks (Veličković et al., ICLR 2018)
     https://arxiv.org/abs/1710.10903
 """
-from layers.gat_layer import GATLayer, CustomGATLayerEdgeReprFeat, CustomGATLayer
+from layers.gat_layer import GATLayer, CustomGATLayerEdgeReprFeat, CustomGATHeadLayerEdgeReprFeat
 from layers.mlp_readout_layer import MLPReadout
-
-
-class GTP(nn.Module):
-    def __init__(self, in_dim_node, hidden_dim, edge_thresh):
-        super().__init__()
-
-        self.proj_g1 = nn.Embedding(in_dim_node,self.hidden_dim**2) #lr_g
-        self.bn_node_lr_g1 = nn.BatchNorm1d(self.hidden_dim**2)
-        self.proj_g2 = nn.Embedding(in_dim_node,self.hidden_dim) #lr_g
-        self.bn_node_lr_g2 = nn.BatchNorm1d(self.hidden_dim)
-        self.proj_g = nn.Linear(self.hidden_dim, 1)
-        self.edge_thresh = edge_thresh #0.5 #0.7
-
-    def forward(self, g, h, e):
-        ### learned graph list
-        lr_gs = []
-        gs = dgl.unbatch(g)
-        for g in gs:
-            N = g.number_of_nodes()
-            h_single = g.ndata['feat'].to(h.device)
-            h_proj1 = F.dropout(F.relu(self.bn_node_lr_g1(self.proj_g1(h_single))), 0.1, training=self.training).view(-1,self.hidden_dim)
-            h_proj2 = F.dropout(F.relu(self.bn_node_lr_g2(self.proj_g2(h_single))), 0.1, training=self.training).permute(1,0)
-
-            mm = torch.mm(h_proj1,h_proj2)
-            mm = mm.view(N,self.hidden_dim,-1).permute(0,2,1) #[N, N, D]                    
-            
-            mm = self.proj_g(mm).squeeze(-1)
-            diag_mm = torch.diag(mm)
-            diag_mm = torch.diag_embed(diag_mm)
-            mm -= diag_mm
-
-#            matrix = torch.sigmoid(mm)
-#            matrix = F.softmax(mm, dim=0)
-            matrix = F.softmax(mm, dim=0) * F.softmax(mm, dim=1)
-            lr_connetion = torch.where(matrix>self.edge_thresh)
-            g.add_edges(lr_connetion[0], lr_connetion[1])
-            lr_gs.append(g)
-        g = dgl.batch(lr_gs).to(h.device)
-        return g
-
-class MERG(nn.Module):
-    def __init__(self, in_dim_node, hidden_dim, num_heads):
-        super().__init__()
-        self.hidden_dim = hidden_dim * num_heads
-        self.proj1 = nn.Linear(self.hidden_dim,self.hidden_dim**2) 
-        self.proj2 = nn.Linear(self.hidden_dim,self.hidden_dim) 
-        self.src_embedding_h = nn.Embedding(in_dim_node, self.hidden_dim) 
-        self.dst_embedding_h = nn.Embedding(in_dim_node, self.hidden_dim) 
-        self.edge_proj = nn.Linear(2*self.hidden_dim,self.hidden_dim) 
-        self.edge_proj3 = nn.Linear(self.hidden_dim,self.hidden_dim) 
-        
-        self.bn_node_lr_e = nn.BatchNorm1d(self.hidden_dim)
-
-    def forward(self, g, h, e):
-        g.apply_edges(lambda edges: {'src' : edges.src['feat']})
-        src = self.src_embedding_h(g.edata['src'].to(h.device)) #[M,D]
-        g.apply_edges(lambda edges: {'dst' : edges.dst['feat']})
-        dst = self.dst_embedding_h(g.edata['dst'].to(h.device)) #[M,D]
-        edge = torch.cat((src,dst),-1) #[M,2]
-        lr_e_local = self.edge_proj(edge) #[M,D]
-
-        N = h.shape[0]
-        h_proj1 = self.proj1(h).view(-1,self.hidden_dim)
-        h_proj2 = self.proj2(h).permute(1,0)
-        mm = torch.mm(h_proj1,h_proj2)
-        mm = mm.view(N,self.hidden_dim,-1).permute(0,2,1) #[N, N, D]
-        lr_e_global = mm[g.all_edges()[0],g.all_edges()[1],:] #[M,D]
-        lr_e_global = self.edge_proj3(lr_e_global) 
-
-        e = lr_e_local + lr_e_global        
-        
-        # bn=>relu=>dropout
-        e = self.bn_node_lr_e(e)
-        e = F.relu(e)
-        e = F.dropout(e, 0.1, training=self.training)  
-
-        return e
 
 class GATNet(nn.Module):
 
@@ -112,28 +35,35 @@ class GATNet(nn.Module):
         
         self.embedding_h = nn.Embedding(in_dim_node, hidden_dim * num_heads) # node feat is an integer
         
+        in_dim_edge = 1
+        self.embedding_e = nn.Linear(in_dim_edge, hidden_dim * num_heads)
+        
         self.in_feat_dropout = nn.Dropout(in_feat_dropout)
         
-        self.layers = nn.ModuleList([CustomGATLayer(hidden_dim * num_heads, hidden_dim, num_heads,
-                                              dropout, self.batch_norm, self.residual) for _ in range(n_layers-1)])
-        self.layers.append(CustomGATLayer(hidden_dim * num_heads, out_dim, 1, dropout, self.batch_norm, self.residual))
+#        self.layers = nn.ModuleList([GATLayer(hidden_dim * num_heads, hidden_dim, num_heads,
+#                                              dropout, self.batch_norm, self.residual) for _ in range(n_layers-1)])
+#        self.layers.append(GATLayer(hidden_dim * num_heads, out_dim, 1, dropout, self.batch_norm, self.residual))
+        layers_list = []
+        for i in range(n_layers-1):
+            if i in [0, 8]: #[0]
+                edge_lr = True
+            else:
+                edge_lr = False
+            layers_list.append(CustomGATLayerEdgeReprFeat(hidden_dim * num_heads, hidden_dim, num_heads,
+                                              dropout, self.batch_norm, self.residual, edge_lr))
+        layers_list.append(CustomGATLayerEdgeReprFeat(hidden_dim * num_heads, out_dim, 1, dropout, self.batch_norm, self.residual, edge_lr=False))
+        self.layers = nn.ModuleList(layers_list)
+        
         self.MLP_layer = MLPReadout(out_dim, n_classes)
-
-        self.gtp = GTP(in_dim_node, hidden_dim, edge_thresh=0.3)
-        self.merg = MERG(in_dim_node, hidden_dim, num_heads)
-
 
 
     def forward(self, g, h, e):
-        lr_g = self.gtp(g,h,e)
-        g = lr_g
+
         # input embedding
         h = self.embedding_h(h)
+        e = self.embedding_e(e)
         h = self.in_feat_dropout(h)
 
-        lr_e = self.merg(g,h,e)
-        e = lr_e        
-        
         # GAT
         for conv in self.layers:
             h, e = conv(g, h, e)
