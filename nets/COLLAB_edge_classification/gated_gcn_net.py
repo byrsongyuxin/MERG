@@ -12,44 +12,6 @@ import dgl
 from layers.gated_gcn_layer import GatedGCNLayer, GatedGCNLayerEdgeFeatOnly, GatedGCNLayerIsotropic
 from layers.mlp_readout_layer import MLPReadout
 
-
-class MERG(nn.Module):
-    def __init__(self, in_dim, hidden_dim):
-        super().__init__()
-        #self.proj1 = nn.Linear(235868,512)
-        #self.proj2 = nn.Linear(512,2358104)
-        #self.proj3 = nn.Linear(in_dim,hidden_dim)
-        self.edge_proj = nn.Conv1d(in_channels=2,out_channels=1,kernel_size=3,padding=1) 
-        self.edge_proj2 = nn.Linear(in_dim,hidden_dim) 
-        self.bn_node_lr_e = nn.BatchNorm1d(hidden_dim)
-
-    def forward(self, g, h, e):
-        g.apply_edges(lambda edges: {'src' : edges.src['feat']})
-        src = g.edata['src'].unsqueeze(1) #[M,1,D]
-        g.apply_edges(lambda edges: {'dst' : edges.dst['feat']})
-        dst = g.edata['dst'].unsqueeze(1) #[M,1,D]
-        edge = torch.cat((src,dst),1).to(h.device).float() #[M,2,D]
-        lr_e_local = self.edge_proj(edge).squeeze(1)#[M,D]
-        lr_e_local = self.edge_proj2(lr_e_local)
-        #h_e = h.permute(1,0)
-        #h_e = self.proj1(h_e)
-        #h_e = F.relu(h_e)
-        #h_e = self.proj2(h_e)
-        #F.dropout(h_e, 0.1, training=self.training)
-        #h_e = h_e.permute(1,0)
-        #lr_e_global = self.proj3(h_e)
-        
-        # input embedding
-        e = self.embedding_e(e.float()) + lr_e_local #+ lr_e_global        
-        
-        # bn=>relu=>dropout
-        e = self.bn_node_lr_e(e)
-        e = F.relu(e)
-        e = F.dropout(e, 0.1, training=self.training)
-
-        return e
-
-        
 class GatedGCNNet(nn.Module):
     
     def __init__(self, net_params):
@@ -78,27 +40,30 @@ class GatedGCNNet(nn.Module):
         
         self.embedding_h = nn.Linear(in_dim, hidden_dim)
         self.embedding_e = nn.Linear(in_dim_edge, hidden_dim)
-        self.layers = nn.ModuleList([ self.layer_type(hidden_dim, hidden_dim, dropout,
-                                                      self.batch_norm, self.residual) for _ in range(n_layers-1) ]) 
-        self.layers.append(self.layer_type(hidden_dim, out_dim, dropout, self.batch_norm, self.residual))
+        
+        layers_list = []
+        for i in range(n_layers):
+            if i in [0]:
+                edge_lr = True
+            else:
+                edge_lr = False
+            layers_list.append(self.layer_type(hidden_dim, hidden_dim, dropout,self.batch_norm, self.residual, edge_lr))
+        layers_list.append(self.layer_type(hidden_dim, hidden_dim, dropout,self.batch_norm, self.residual, False))    
+        
+        self.layers = nn.ModuleList(layers_list)
         
         self.MLP_layer = MLPReadout(2*out_dim, 1)
-
-        self.merg = MERG(in_dim, hidden_dim)
         
-
-
     def forward(self, g, h, e, h_pos_enc=None):
-
-        lr_e = self.merg(g,h,e)
-        e = lr_e
         
         h = self.embedding_h(h.float())
         if self.pos_enc:
             h_pos_enc = self.embedding_pos_enc(h_pos_enc.float()) 
             h = h + h_pos_enc
+        g.ndata['local'] = h
         if not self.edge_feat:
             e = torch.ones_like(e).to(self.device)
+        e = self.embedding_e(e.float())
         
         # convnets
         for conv in self.layers:
