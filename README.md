@@ -68,7 +68,7 @@ class MERG(nn.Module):
         
         e = lr_e_local + lr_e_global + e # with residual connection
 
-        return 
+        return e
 ```
 ## the project structure:
 ```
