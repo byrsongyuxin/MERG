@@ -33,7 +33,7 @@ class MERG(nn.Module):
         self.bn_global = nn.BatchNorm1d(hidden_dim) #baseline4
         
 
-    def forward(self, g, h, e, batch_labels):
+    def forward(self, g, h, e):
         g.apply_edges(lambda edges: {'src' : edges.src['h']})
         src = g.edata['src'].unsqueeze(1) #[M,1,D]
         g.apply_edges(lambda edges: {'dst' : edges.dst['h']})
